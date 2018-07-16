@@ -25,9 +25,9 @@ class Calculation
     //    Function (allow for the old @ symbol that could be used to prefix a function, but we'll ignore it)
     const CALCULATION_REGEXP_FUNCTION = '@?(?:_xlfn\.)?([A-Z][A-Z0-9\.]*)[\s]*\(';
     //    Cell reference (cell or range of cells, with or without a sheet reference)
-    const CALCULATION_REGEXP_CELLREF = '((([^\s,!&%^\/\*\+<>=-]*)|(\'[^\']*\')|(\"[^\"]*\"))!)?\$?([a-z]{1,3})\$?(\d{1,7})';
+    const CALCULATION_REGEXP_CELLREF = '((([^\'\"\s,!&%^\/\*\+<>=-]*)|(\'[^\']*\')|(\"[^\"]*\"))!)?\$?([a-z]{1,3})\$?(\d{1,7})';
     //    Named Range of cells
-    const CALCULATION_REGEXP_NAMEDRANGE = '((([^\s,!&%^\/\*\+<>=-]*)|(\'[^\']*\')|(\"[^\"]*\"))!)?([_A-Z][_A-Z0-9\.]*)';
+    const CALCULATION_REGEXP_NAMEDRANGE = '((([^\s,!&%^\/\*\+<>=-]*)|(\'[^\']*\')|(\"[^\"]*\"))!)?([\w][\w0-9\.]*)';
     //    Error
     const CALCULATION_REGEXP_ERROR = '\#[A-Z][A-Z0_\/]*[!\?]?';
 
@@ -819,6 +819,11 @@ class Calculation
             'category' => Category::CATEGORY_MATH_AND_TRIG,
             'functionCall' => [MathTrig::class, 'FLOOR'],
             'argumentCount' => '2',
+        ],
+        'FLOOR.PRECISE' => [
+            'category' => Category::CATEGORY_MATH_AND_TRIG,
+            'functionCall' => [MathTrig::class, 'FLOOR'],
+            'argumentCount' => '1-2',
         ],
         'FORECAST' => [
             'category' => Category::CATEGORY_STATISTICAL,
@@ -2468,7 +2473,7 @@ class Calculation
             }
             //    Return strings wrapped in quotes
             return '"' . $value . '"';
-        //    Convert numeric errors to NaN error
+            //    Convert numeric errors to NaN error
         } elseif ((is_float($value)) && ((is_nan($value)) || (is_infinite($value)))) {
             return Functions::NAN();
         }
@@ -3110,32 +3115,32 @@ class Calculation
         $pCellParent = ($pCell !== null) ? $pCell->getWorksheet() : null;
 
         $regexpMatchString = '/^(' . self::CALCULATION_REGEXP_FUNCTION .
-                                '|' . self::CALCULATION_REGEXP_CELLREF .
-                                '|' . self::CALCULATION_REGEXP_NUMBER .
-                                '|' . self::CALCULATION_REGEXP_STRING .
-                                '|' . self::CALCULATION_REGEXP_OPENBRACE .
-                                '|' . self::CALCULATION_REGEXP_NAMEDRANGE .
-                                '|' . self::CALCULATION_REGEXP_ERROR .
-                                ')/si';
+            '|' . self::CALCULATION_REGEXP_CELLREF .
+            '|' . self::CALCULATION_REGEXP_NUMBER .
+            '|' . self::CALCULATION_REGEXP_STRING .
+            '|' . self::CALCULATION_REGEXP_OPENBRACE .
+            '|' . self::CALCULATION_REGEXP_NAMEDRANGE .
+            '|' . self::CALCULATION_REGEXP_ERROR .
+            ')/usi';
 
         //    Start with initialisation
         $index = 0;
         $stack = new Stack();
         $output = [];
         $expectingOperator = false; //    We use this test in syntax-checking the expression to determine when a
-                                                    //        - is a negation or + is a positive operator rather than an operation
+        //        - is a negation or + is a positive operator rather than an operation
         $expectingOperand = false; //    We use this test in syntax-checking the expression to determine whether an operand
-                                                    //        should be null in a function call
+        //        should be null in a function call
         //    The guts of the lexical parser
         //    Loop through the formula extracting each operator and operand in turn
         while (true) {
-            $opCharacter = $formula[$index]; //    Get the first character of the value at the current index position
-            if ((isset(self::$comparisonOperators[$opCharacter])) && (strlen($formula) > $index) && (isset(self::$comparisonOperators[$formula[$index + 1]]))) {
-                $opCharacter .= $formula[++$index];
+            $opCharacter = StringUtils::charAt($formula, $index);  //    Get the first character of the value at the current index position
+            if ((isset(self::$comparisonOperators[$opCharacter])) && (StringUtils::length($formula) > $index) && (isset(self::$comparisonOperators[StringUtils::charAt($formula, $index+1)]))) {
+                $opCharacter .= StringUtils::charAt($formula,++$index);
             }
 
             //    Find out if we're currently at the beginning of a number, variable, cell reference, function, parenthesis or operand
-            $isOperandOrFunction = preg_match($regexpMatchString, substr($formula, $index), $match);
+            $isOperandOrFunction = preg_match($regexpMatchString, StringUtils::substr($formula, $index), $match);
 
             if ($opCharacter == '-' && !$expectingOperator) {                //    Is it a negation instead of a minus?
                 $stack->push('Unary Operator', '~'); //    Put a negation on the stack
@@ -3256,18 +3261,19 @@ class Calculation
                 $expectingOperator = true;
                 $expectingOperand = false;
                 $val = $match[1];
-                $length = strlen($val);
+                $length = StringUtils::length($val);
 
                 if (preg_match('/^' . self::CALCULATION_REGEXP_FUNCTION . '$/i', $val, $matches)) {
                     $val = preg_replace('/\s/u', '', $val);
-                    if (isset(self::$phpSpreadsheetFunctions[strtoupper($matches[1])]) || isset(self::$controlFunctions[strtoupper($matches[1])])) {    // it's a function
-                        $stack->push('Function', strtoupper($val));
-                        $ax = preg_match('/^\s*(\s*\))/ui', substr($formula, $index + $length), $amatch);
+                    $probableFunction = StringUtils::toUpper($matches[1]);
+                    if (isset(self::$phpSpreadsheetFunctions[$probableFunction]) || isset(self::$controlFunctions[$probableFunction])) {    // it's a function
+                        $stack->push('Function', StringUtils::toUpper($val));
+                        $ax = preg_match('/^\s*(\s*\))/ui', StringUtils::substr($formula,$index + $length), $amatch);
                         if ($ax) {
-                            $stack->push('Operand Count for Function ' . strtoupper($val) . ')', 0);
+                            $stack->push('Operand Count for Function ' . StringUtils::toUpper($val) . ')', 0);
                             $expectingOperator = true;
                         } else {
-                            $stack->push('Operand Count for Function ' . strtoupper($val) . ')', 1);
+                            $stack->push('Operand Count for Function ' . StringUtils::toUpper($val) . ')', 1);
                             $expectingOperator = false;
                         }
                         $stack->push('Brace', '(');
@@ -3379,11 +3385,11 @@ class Calculation
                 break;
             }
             //    Ignore white space
-            while (($formula[$index] == "\n") || ($formula[$index] == "\r")) {
+            while (StringUtils::charAt($formula, $index) == "\n" || StringUtils::charAt($formula, $index) == "\r") {
                 ++$index;
             }
-            if ($formula[$index] == ' ') {
-                while ($formula[$index] == ' ') {
+            if (StringUtils::charAt($formula, $index) == ' ') {
+                while (StringUtils::charAt($formula, $index) == ' ') {
                     ++$index;
                 }
                 //    If we're expecting an operator, but only have a space between the previous and next operands (and both are
@@ -3704,7 +3710,7 @@ class Calculation
                 }
                 $stack->push('Value', $cellValue, $cellRef);
 
-            // if the token is a function, pop arguments off the stack, hand them to the function, and push the result back on
+                // if the token is a function, pop arguments off the stack, hand them to the function, and push the result back on
             } elseif (preg_match('/^' . self::CALCULATION_REGEXP_FUNCTION . '$/i', $token, $matches)) {
                 $functionName = $matches[1];
                 $argCount = $stack->pop();
@@ -3789,8 +3795,8 @@ class Calculation
                     $this->debugLog->writeDebugLog('Evaluating Constant ', $excelConstant, ' as ', $this->showTypeDetails(self::$excelConstants[$excelConstant]));
                 } elseif ((is_numeric($token)) || ($token === null) || (is_bool($token)) || ($token == '') || ($token[0] == '"') || ($token[0] == '#')) {
                     $stack->push('Value', $token);
-                // if the token is a named range, push the named range name onto the stack
-                } elseif (preg_match('/^' . self::CALCULATION_REGEXP_NAMEDRANGE . '$/i', $token, $matches)) {
+                    // if the token is a named range, push the named range name onto the stack
+                } elseif (preg_match('/^' . self::CALCULATION_REGEXP_NAMEDRANGE . '$/iu', $token, $matches)) {
                     $namedRange = $matches[6];
                     $this->debugLog->writeDebugLog('Evaluating Named Range ', $namedRange);
 
@@ -4044,7 +4050,7 @@ class Calculation
         } else {
             if ((Functions::getCompatibilityMode() != Functions::COMPATIBILITY_OPENOFFICE) &&
                 ((is_string($operand1) && !is_numeric($operand1) && strlen($operand1) > 0) ||
-                 (is_string($operand2) && !is_numeric($operand2) && strlen($operand2) > 0))) {
+                    (is_string($operand2) && !is_numeric($operand2) && strlen($operand2) > 0))) {
                 $result = Functions::VALUE();
             } else {
                 //    If we're dealing with non-matrix operations, execute the necessary operation
@@ -4073,7 +4079,7 @@ class Calculation
 
                             return false;
                         }
-                            $result = $operand1 / $operand2;
+                        $result = $operand1 / $operand2;
 
                         break;
                     //    Power
