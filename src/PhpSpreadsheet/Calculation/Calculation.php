@@ -3328,10 +3328,10 @@ class Calculation
                             $output[count($output) - 1]['value'] = $rangeWS1 . 'A' . $startRowColRef;
                             $val = $rangeWS2 . $endRowColRef . $val;
                         } elseif ((ctype_alpha($startRowColRef)) && (ctype_alpha($val)) &&
-                            (strlen($startRowColRef) <= 3) && (strlen($val) <= 3)) {
+                            (StringUtils::length($startRowColRef) <= 3) && (StringUtils::length($val) <= 3)) {
                             //    Column range
                             $endRowColRef = ($pCellParent !== null) ? $pCellParent->getHighestRow() : 1048576; //    Max 1,048,576 rows for Excel2007
-                            $output[count($output) - 1]['value'] = $rangeWS1 . strtoupper($startRowColRef) . '1';
+                            $output[count($output) - 1]['value'] = $rangeWS1 . StringUtils::toUpper($startRowColRef) . '1';
                             $val = $rangeWS2 . $val . $endRowColRef;
                         }
                     }
@@ -3346,10 +3346,10 @@ class Calculation
                         } else {
                             $val = (int) $val;
                         }
-                    } elseif (isset(self::$excelConstants[trim(strtoupper($val))])) {
-                        $excelConstant = trim(strtoupper($val));
+                    } elseif (isset(self::$excelConstants[trim(StringUtils::toUpper($val))])) {
+                        $excelConstant = trim(StringUtils::toUpper($val));
                         $val = self::$excelConstants[$excelConstant];
-                    } elseif (($localeConstant = array_search(trim(strtoupper($val)), self::$localeBoolean)) !== false) {
+                    } elseif (($localeConstant = array_search(trim(StringUtils::toUpper($val)), self::$localeBoolean)) !== false) {
                         $val = self::$excelConstants[$localeConstant];
                     }
                     $details = ['type' => 'Value', 'value' => $val, 'reference' => null];
@@ -3375,7 +3375,7 @@ class Calculation
                 return $this->raiseFormulaError('Formula Error: An unexpected error occured');
             }
             //    Test for end of formula string
-            if ($index == strlen($formula)) {
+            if ($index == StringUtils::length($formula)) {
                 //    Did we end with an operator?.
                 //    Only valid for the % unary operator
                 if ((isset(self::$operators[$opCharacter])) && ($opCharacter != '%')) {
