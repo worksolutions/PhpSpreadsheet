@@ -587,6 +587,8 @@ class LookupRef
         $rowNum = Functions::flattenSingleValue($rowNum);
         $columnNum = Functions::flattenSingleValue($columnNum);
 
+        !$rowNum && $rowNum = 1;
+
         if (($rowNum < 0) || ($columnNum < 0)) {
             return Functions::VALUE();
         }
@@ -597,8 +599,6 @@ class LookupRef
 
         $rowKeys = array_keys($arrayValues);
         $columnKeys = @array_keys($arrayValues[$rowKeys[0]]);
-
-        !$rowNum && $rowNum = $rowKeys[0];
 
         if ($columnNum > count($columnKeys)) {
             return Functions::VALUE();
