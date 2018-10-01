@@ -3835,6 +3835,9 @@ class Calculation
             if ($operand > '' && $operand[0] == '"') {
                 $operand = self::unwrapResult($operand);
             }
+            if ($operand === '') {
+                return true;
+            }
             //    If the string is a numeric value, we treat it as a numeric, so no further testing
             if (!is_numeric($operand)) {
                 //    If not a numeric, test to see if the value is an Excel error, and so can't be used in normal binary operations
